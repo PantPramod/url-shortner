@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, query, where } from "firebase/firestore";
+import {  doc, getDoc} from "firebase/firestore";
 import { useEffect } from "react"
 import { db } from "./firebase";
 import { useParams } from "react-router-dom";
@@ -23,9 +23,9 @@ const RedirectScreen = () => {
             return;
         }
     }
-    // useEffect(() => {
-    //     getRedirectPath()
-    // }, [])
+    useEffect(() => {
+        getRedirectPath()
+    }, [])
     return (
         <div className="flex items-center justify-center text-xl min-h-[80vh] bg-[#263849] text-white">
             <RedirectSpinner />
