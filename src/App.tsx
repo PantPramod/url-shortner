@@ -1,7 +1,9 @@
-import { FormEvent, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { collection, doc, getDoc, setDoc, query, where, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 import Loader from "./components/Loader";
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { Link } from "react-router-dom";
 
 const App = () => {
   const [text, setText] = useState('')
@@ -11,6 +13,7 @@ const App = () => {
     originalUrl: '',
     newUrl: ''
   })
+  const [user, setUser] = useState<any>(localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null)
 
   const [showLoader, setShowLoader] = useState(false)
   async function getNewId() {
@@ -26,43 +29,56 @@ const App = () => {
 
   const submitHandler = async (e: FormEvent) => {
     e.preventDefault()
-    try{
-    setShowLoader(true)
+    try {
+      setShowLoader(true)
+
+      let myquery
+
+      if (user) {
+        myquery = query(collection(db, "urls"), where("originalUrl", "==", text), where("uid", "==", user?.uid));
+
+      } else {
+        myquery = query(collection(db, "urls"), where("originalUrl", "==", text));
+      }
 
 
-    const q = query(collection(db, "urls"), where("originalUrl", "==", text));
+      const querySnapshot = await getDocs(myquery);
 
-    const querySnapshot = await getDocs(q);
+      let arr: { originalUrl: string, newUrl: string }[] = []
+      querySnapshot.forEach((doc) => {
+        //@ts-ignore
+        arr.push(doc.data())
 
-    let arr: { originalUrl: string, newUrl: string }[] = []
-    querySnapshot.forEach((doc) => {
-      //@ts-ignore
-      arr.push(doc.data())
-    });
+      });
+
+      if (arr.length > 0) {
+        setResult({ newUrl: arr[0].newUrl, originalUrl: arr[0].originalUrl })
+        setShowLoader(false)
+        setShowModal(true)
+        return;
+      }
 
 
-    if (arr.length > 0) {
-      setResult({ newUrl: arr[0]?.newUrl, originalUrl: arr[0]?.originalUrl })
+
+
+
+
+      let id = await getNewId()
+
+      await setDoc(doc(db, "urls", id!), {
+        originalUrl: text,
+        newUrl: `${window.location.href}${id}`,
+        ...(user && { uid: user?.uid }),
+        click: 0
+      });
+
+      setResult({ newUrl: `${window.location.href}${id}`, originalUrl: text })
       setShowLoader(false)
       setShowModal(true)
-      return;
+    } catch (err) {
+      setShowLoader(false)
+      setShowModal(false)
     }
-
-    let id = await getNewId()
-    console.log(`${window.location.href}${id}`)
-
-    await setDoc(doc(db, "urls", id!), {
-      originalUrl: text,
-      newUrl: `${window.location.href}${id}`
-    });
-
-    setResult({ newUrl: `${window.location.href}${id}`, originalUrl: text })
-    setShowLoader(false)
-    setShowModal(true)
-  }catch(err){
-    setShowLoader(false)
-    setShowModal(false)
-  }
   }
 
   const copyHandler = (str: string) => {
@@ -74,12 +90,61 @@ const App = () => {
 
   }
 
+  const signInHandler = () => {
+    const auth = getAuth();
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider)
+      .then((result: any) => {
+        // This gives you a Google Access Token. You can use it to access the Google API.
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const token = credential!.accessToken;
+        // The signed-in user info.
+        const user = result.user;
 
+        setUser({ ...user })
+        console.log(user, token)
+        // IdP data available using getAdditionalUserInfo(result)
+        // ...
+      }).catch((error) => {
+        // Handle Errors here.
+        const errorCode = error.code;
+        const errorMessage = error.message;
+        // The email of the user's account used.
+        const email = error.customData.email;
+        // The AuthCredential type that was used.
+        const credential = GoogleAuthProvider.credentialFromError(error);
+        // ...
+      });
+  }
+
+  useEffect(() => {
+    localStorage.setItem('user', JSON.stringify(user))
+  }, [user])
+
+  console.log("User=>", user)
   return (
     <>
-      <div className="min-h-screen ">
 
+      <div className="min-h-screen ">
         <div className="bg-[#263849] min-h-[80vh] pb-10">
+
+          <div className=" p-4 relative">
+            {user && <p className="absolute left-1/2 -translate-x-1/2 text-white"><Link to={`/dashboard/${user.uid}`}>Dashboard</Link></p>}
+            {
+              user ? <div className="flex gap-x-4 justify-end text-white" >
+                <span className="mr-2">{user?.displayName}</span>
+                <p className="flex items-center justify-center    w-8 h-8 rounded-full bg-blue-600 text-white overflow-hidden">
+
+                  <img src={user?.photoURL} alt={user?.displayName[0]} />
+                </p>
+                <button
+                  onClick={() => setUser(null)}
+                  className="bg-gray-700 text-sm text-white rounded-md px-4 py-2">Logout</button>
+              </div>
+                :
+                <button className="border text-white bg-blue-500 px-4 py-2 rounded-md ml-auto block  " onClick={signInHandler}>Signin with Google</button>
+            }
+          </div>
           <h1 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-center pt-20 font-semibold">Free URL Shortner</h1>
           <p className="text-gray-400 text-xs px-2 md:max-w-[575px] lg:max-w-[unset] md:mx-auto sm:text-sm md:text-[16px] mt-5 text-center ">url shortner is a free tool to shorten URLs . Create short , memorable and easy links in seconds.</p>
           <form className="flex sm:w-[70%] md:w-[70%] lg:w-[55%] mx-auto mt-5 gap-x-1 sm:gap-x-5 px-3" onSubmit={submitHandler}>

@@ -1,4 +1,4 @@
-import {  doc, getDoc} from "firebase/firestore";
+import {  doc, getDoc, updateDoc} from "firebase/firestore";
 import { useEffect } from "react"
 import { db } from "./firebase";
 import { useParams } from "react-router-dom";
@@ -10,13 +10,17 @@ const RedirectScreen = () => {
     async function getRedirectPath() {
         const docRef = doc(db, "urls", id!);
         const docSnap = await getDoc(docRef);
+        
+        await updateDoc(doc(db, "urls", docSnap.id), {
+            click: docSnap?.data()!.click +1
+          });
         if (docSnap.exists()) {
             console.log(docSnap.data());
 
             let anchor = document.createElement('a')
             anchor.setAttribute('href', docSnap?.data()?.originalUrl)
             document.body.appendChild(anchor)
-            // window.location.assign(docSnap?.data()?.originalUrl)
+            window.location.assign(docSnap?.data()?.originalUrl)
             anchor.click();
             document.body.removeChild(anchor)
         } else {
